@@ -1,0 +1,8 @@
+Use case: sketch-to-render. Functional test asset for CST RenderAI. Generate one photorealistic industrial product photograph from the provided technical drawing. Subject is ONE simple flat circular flange plate, AISI 316L stainless steel with satin brushed finish. Outer diameter 150 mm, central through bore diameter 60 mm, plate thickness 15 mm. Exactly FOUR small through bolt holes equally spaced at cardinal directions around the central bore, matching the reference drawing. All holes visible through the thickness. Preserve the simple flat annular geometry, no hub, no neck, no added hardware or pipes. Isometric three-quarter view, plate resting on a clean white studio background, soft realistic contact shadow, physically realistic metal, sharp product detail. No text, labels, watermark or dimension lines. Maximum available visual quality. Square composition. Dimensions are visual constraints, this image is not CAD verification.
+
+Execution: built-in image_gen tool, no API fallback.
+Reference: Flangia_DN150_frontale.jpg (technical geometry reference).
+Output: Flangia_DN150_generated.png. Actual 1254 x 1254 pixels.
+Date: 2026-11-03.
+This is an authentic generated test image imported through the app's result handling.
+It verifies image generation in this conversation and result import, not CLI availability or dimensional accuracy.
