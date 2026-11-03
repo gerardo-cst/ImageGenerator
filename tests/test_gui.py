@@ -8,7 +8,7 @@ from unittest.mock import patch
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QImage
 from cst_renderai.window import MainWindow
-from cst_renderai.models import Project
+from cst_renderai.models import Project, Variable
 from cst_renderai.backend import AssistedBackend
 from cst_renderai.documents import import_document
 
@@ -29,7 +29,10 @@ class GuiTests(unittest.TestCase):
             window.load_form()
             window.name.setText("Valvola_DN150")
             window.fields["Materiale principale"].setText("AISI 316L")
-            window.fields["Diametro esterno"].setText("150")
+            window.project.variables = [Variable("Diametro esterno", "150", "mm")]
+            window.load_form()
+            window.name.setText("Valvola_DN150")
+            window.fields["Materiale principale"].setText("AISI 316L")
             window.fields["Finitura"].setText("satinata")
             window.sync_form()
             window.enqueue()

@@ -1,5 +1,34 @@
 # Verifica Codex e ChatGPT Plus — 3 novembre 2026
 
+## Aggiornamento: flusso diretto e motore incluso
+
+La versione attuale imposta Diretto come flusso principale. Il clic Genera foto
+avvia esplicitamente invio, esecuzione CLI e importazione/salvataggio del file
+reale senza passaggi manuali. Non chiede conferme ripetute. La modalità Manuale
+è una scelta alternativa esplicita, non un fallback automatico.
+
+Il deploy include la distribuzione nativa ufficiale Windows x64 di Codex 0.163.0,
+senza modifiche, con risorse e licenza Apache-2.0. Non richiede Node sul client.
+L'app usa prima `tools/codex/bin/codex.exe`, poi l'installazione locale se assente.
+Accedi a ChatGPT lancia esclusivamente il login ufficiale. Token e dati interni
+Codex rimangono nel profilo utente del motore, non sono copiati o letti dall'app.
+
+Nuova prova reale con `--enable image_generation`: login confermato, app-server
+ancora bloccato da `Access is denied` e database locale non accessibile. Non è
+stata ottenuta un'immagine dalla CLI. Il codice di orchestrazione a un clic è
+verificato con un backend controllato di test, che non prova disponibilità cloud.
+
+Il controllo Connessione verifica soltanto il login. Non dichiara pronto il tool
+immagini senza una generazione riuscita. Il deploy deve essere provato da una
+normale sessione desktop con i permessi del proprio account.
+
+Il generatore riceve riferimenti puliti e copie con quote/note collegate alle
+variabili, con ordine e ruoli espliciti. I prompt richiedono fotografie al massimo
+realismo e nessuna annotazione nel risultato, senza promettere accuratezza CAD.
+
+Le evidenze e decisioni della prima versione sono riportate sotto; il precedente
+default assistito è stato sostituito dal flusso diretto descritto qui.
+
 ## Evidenze locali
 
 - Codex CLI installato: `codex-cli 0.163.0`.

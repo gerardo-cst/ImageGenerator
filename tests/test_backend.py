@@ -24,7 +24,7 @@ class BackendTests(unittest.TestCase):
             image.save(str(root / "source.png"))
             p = Project(references=import_document(root / "source.png", root / "refs"))
             with patch("cst_renderai.backend.codex_command", return_value=["codex"]), patch("cst_renderai.backend.subprocess.run", return_value=subprocess.CompletedProcess([], 0, "Logged in using an API key", "")), patch("cst_renderai.backend.subprocess.Popen") as run:
-                with self.assertRaisesRegex(RuntimeError, "ChatGPT non confermata"):
+                with self.assertRaisesRegex(RuntimeError, "ChatGPT non confermato"):
                     CodexBackend().generate(p, root / "jobs", threading.Event(), lambda _: None)
                 run.assert_not_called()
 

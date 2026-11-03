@@ -2,6 +2,46 @@
 
 Aggiornato: 3 novembre 2026.
 
+## Aggiornamento generazione diretta e annotazioni
+
+- [x] Flusso Diretto predefinito: Genera foto avvia preparazione, invio, ricezione
+  e salvataggio senza allegati manuali e senza conferma ripetuta per tentativo.
+- [x] Login ufficiale ChatGPT e controllo connessione dall'interfaccia.
+- [x] Packaging del motore Codex nativo ufficiale con risorse e licenza, senza token.
+- [x] Campi dimensionali fissi sostituiti da variabili nome/valore/unità.
+- [x] Migrazione dei vecchi progetti, nomi e collegamenti stabili tramite ID.
+- [x] Editor quote, linee e note; trascinamento corpo/estremi, testo libero,
+  ricollegamento variabile, eliminazione, annulla/ripeti.
+- [x] Coordinate originali preservate attraverso rotazione e ritaglio.
+- [x] Aggiornamento etichette al cambio variabile, esportazione PNG non distruttiva.
+- [x] Riferimenti puliti + annotati ordinati e vincoli espliciti nel prompt.
+- [x] Priorità a fedeltà e resa fotografica massima; nessuna nota nel render finale.
+- [x] 27 test automatici superati, compresi gesti mouse e flusso diretto a un clic
+  con backend controllato di test (nessuna generazione live simulata nell'app).
+- [x] Nuova prova CLI reale con image_generation abilitato: avvio nuovamente negato
+  dai permessi app-server, prima dell'elaborazione. Generazione live non verificata.
+- [x] Nuovo EXE compilato in dist e diagnostica offline superata: editor annotazioni,
+  riferimenti puliti/annotati, default diretto, GUI, icona e massimizzazione validi.
+- [x] Aggiornamento EXE/DLL di deploy completato dopo la chiusura dell'app da parte
+  dell'utente; dati portatili conservati, nessuna chiusura forzata.
+- [x] Diagnostica sul nuovo EXE in deploy: exit code 0, editor annotazioni,
+  riferimenti annotati, GUI, icona, massimizzazione e default diretto confermati.
+
+## Aggiornamento distribuzione portatile
+
+- [x] Guida d'uso passo passo in `deploy/GUIDA_USO.txt`, inclusa automaticamente
+  dal packaging e richiamata dal LEGGIMI.
+
+- [x] Icona originale SVG e ICO multirisoluzione per EXE e finestra/taskbar.
+- [x] Avvio massimizzato con barra titolo Windows, ripristino e ridimensionamento.
+- [x] Pacchetto autonomo `deploy` con runtime incluso, launcher e guida rapida.
+- [x] Modalità portatile: dati e impostazioni nella cartella, separati per PC/utente.
+- [x] Blocco istanze concorrenti sullo stesso profilo; nessuna condivisione token.
+- [x] Istruzioni per avvio dalla rete e requisiti client Windows.
+- [x] 19 test superati; eseguibile deploy verificato da una directory diversa:
+  icona e massimizzazione confermate, PDF/JPG e output validi, exit code 0.
+- [ ] Test su condivisione SMB reale da un secondo PC (non disponibile qui).
+
 - [x] Verifica documentazione ufficiale, skill imagegen e CLI locale.
 - [x] Distinzione tra piano ChatGPT, tool integrato e API a pagamento.
 - [x] Architettura modulare, protocollo backend sostituibile.

@@ -16,11 +16,12 @@ from PySide6.QtWidgets import (
     QProgressBar, QGroupBox,
 )
 
-from .backend import AssistedBackend, CodexBackend, GenerationResult
+from .backend import AssistedBackend, CodexBackend, GenerationResult, check_codex_connection, login_codex
 from .documents import import_document, load_pdf, page_selection, prepare_image, checked_image
-from .models import Project, Reference, ROLES, MODES, TECH_FIELDS
+from .models import Project, Reference, ROLES, MODES, MATERIAL_FIELDS, Variable, Annotation
+from .annotations import display_annotations, annotated_image, annotation_label, to_original
 from .prompts import build_prompt, warnings
-from .storage import data_root, save_output
+from .storage import data_root, save_output, save_png_exclusive
 from .viewer import ImageViewer
 from .workers import Worker
 
@@ -49,7 +50,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1040, 680)
         self.setAcceptDrops(True)
         self.setStyleSheet(STYLE)
-        self.settings = QSettings("CST", "RenderAI")
+        self.settings = QSettings(str(data_root() / "settings.ini"), QSettings.Format.IniFormat)
         self.project = Project()
         self.project_path: Path | None = None
         self.worker: Worker | None = None
@@ -59,6 +60,9 @@ class MainWindow(QMainWindow):
         self.current_job: Path | None = None
         self.current_attempt: dict | None = None
         self._building = False
+        self.selected_note = ""
+        self._annotation_undo: dict[int, list] = {}
+        self._annotation_redo: dict[int, list] = {}
         self._build()
         self._menus()
         geometry = self.settings.value("geometry")
@@ -140,6 +144,18 @@ class MainWindow(QMainWindow):
         self.compare_check.toggled.connect(lambda enabled: self.output_container.setVisible(enabled))
         controls.addWidget(self.compare_check)
         vl.addLayout(controls)
+        annotation_bar = QHBoxLayout()
+        annotation_bar.addWidget(QLabel("Annota:"))
+        self.annotation_tool = self.combo(["Naviga / modifica", "Quota", "Linea", "Nota con richiamo"])
+        self.annotation_tool.currentIndexChanged.connect(self.annotation_tool_changed)
+        annotation_bar.addWidget(self.annotation_tool)
+        self.annotation_variable = QComboBox()
+        self.annotation_variable.setMinimumWidth(100)
+        self.annotation_variable.setToolTip("Variabile da collegare alla nuova annotazione")
+        annotation_bar.addWidget(self.annotation_variable, 1)
+        self.button("Collega", self.link_annotation, annotation_bar)
+        self.button("PNG annotato", self.export_annotated, annotation_bar)
+        vl.addLayout(annotation_bar)
         viewers = QSplitter()
         input_container = QWidget()
         il = QVBoxLayout(input_container)
@@ -147,6 +163,11 @@ class MainWindow(QMainWindow):
         il.addWidget(QLabel("DOCUMENTO · rotella per zoom, trascina per spostare"))
         self.input_view = ImageViewer()
         self.input_view.crop_selected.connect(self.apply_crop)
+        self.input_view.annotation_created.connect(self.create_annotation)
+        self.input_view.annotation_changed.connect(self.move_annotation)
+        self.input_view.annotation_selected.connect(self.select_annotation)
+        self.input_view.delete_requested.connect(self.delete_annotation)
+        self.input_view.tool_reset.connect(lambda: self.annotation_tool.setCurrentIndex(0))
         il.addWidget(self.input_view)
         viewers.addWidget(input_container)
         self.output_container = QWidget()
@@ -154,6 +175,7 @@ class MainWindow(QMainWindow):
         ol.setContentsMargins(0, 0, 0, 0)
         ol.addWidget(QLabel("RENDER · fedeltà visiva, geometria non certificata"))
         self.output_view = ImageViewer()
+        self.output_view.editable = False
         self.output_choices = QComboBox()
         self.output_choices.currentTextChanged.connect(self.select_output)
         ol.addWidget(self.output_choices)
@@ -178,7 +200,7 @@ class MainWindow(QMainWindow):
         self.button("Accoda oggetto corrente", self.enqueue, br)
         self.button("Aggiungi progetti…", self.enqueue_projects, br)
         self.button("Rimuovi selezionato", self.dequeue, br)
-        self.button("Avvia coda", self.start_batch, br)
+        self.button("Avvia coda (cloud se diretto)", self.start_batch, br)
         bl.addLayout(br)
         self.tabs.addTab(batch, "Batch oggetti")
         splitter.addWidget(center)
@@ -196,24 +218,39 @@ class MainWindow(QMainWindow):
         self.unit = self.combo(["mm", "cm", "m", "in"])
         form.addRow("Unità quote", self.unit)
         self.fields: dict[str, QLineEdit] = {}
-        for field in TECH_FIELDS:
+        for field in MATERIAL_FIELDS:
             edit = QLineEdit()
             edit.setPlaceholderText("Facoltativo")
             self.fields[field] = edit
             form.addRow(field, edit)
         rl.addWidget(obj)
-        custom = QGroupBox("Caratteristiche personalizzate")
+        custom = QGroupBox("Variabili e quote sul documento")
         cu = QVBoxLayout(custom)
-        self.custom = QTableWidget(0, 2)
-        self.custom.setHorizontalHeaderLabels(["Caratteristica", "Valore"])
+        self.custom = QTableWidget(0, 3)
+        self.custom.setHorizontalHeaderLabels(["Variabile", "Valore", "Unità"])
+        self.custom.setColumnWidth(0, 125)
+        self.custom.setColumnWidth(1, 85)
         self.custom.horizontalHeader().setStretchLastSection(True)
-        self.custom.setMaximumHeight(125)
+        self.custom.setMaximumHeight(190)
+        self.custom.itemChanged.connect(self.variables_changed)
         cu.addWidget(self.custom)
         cr = QHBoxLayout()
-        self.button("+ Riga", lambda: self.custom.insertRow(self.custom.rowCount()), cr)
-        self.button("− Riga", lambda: self.custom.removeRow(self.custom.currentRow()), cr)
+        self.button("+ Variabile", self.add_variable, cr)
+        self.button("− Variabile", self.remove_variable, cr)
         cu.addLayout(cr)
         rl.addWidget(custom)
+        note_group = QGroupBox("Annotazioni della vista selezionata")
+        ng = QVBoxLayout(note_group)
+        self.annotation_list = QListWidget()
+        self.annotation_list.setMaximumHeight(110)
+        self.annotation_list.currentItemChanged.connect(self.annotation_list_selected)
+        self.annotation_list.itemDoubleClicked.connect(self.edit_annotation_text)
+        ng.addWidget(self.annotation_list)
+        self.button("Elimina annotazione selezionata", self.delete_annotation, ng)
+        hint = QLabel("Scegli una variabile e Quota/Linea/Nota, poi disegna sulla vista. Naviga: trascina linee o estremi. Doppio clic sulla lista per il testo.")
+        hint.setWordWrap(True)
+        ng.addWidget(hint)
+        rl.addWidget(note_group)
         photo = QGroupBox("Resa fotografica")
         pf = QFormLayout(photo)
         self.mode = self.combo(MODES)
@@ -250,18 +287,21 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)
 
         bottom = QHBoxLayout()
-        self.backend = self.combo(["Assistito · prepara pacchetto locale", "Codex CLI · ChatGPT (disponibilità da verificare)"])
-        self.backend.setCurrentIndex(int(self.settings.value("backend", 0)))
+        self.backend = self.combo(["Manuale · solo pacchetto", "Diretto · Codex / ChatGPT"])
+        self.backend.setCurrentIndex(int(self.settings.value("generation_backend_v2", 1)))
+        self.backend.currentIndexChanged.connect(self.backend_changed)
         bottom.addWidget(self.backend)
-        self.button("Aggiorna istruzioni", self.refresh_prompt, bottom)
-        self.generate_button = self.button("Genera / prepara", self.generate, bottom)
+        self.connection_button = self.button("Connessione", self.check_connection, bottom)
+        self.login_button = self.button("Accedi a ChatGPT", self.login, bottom)
+        self.generate_button = self.button("Genera foto (cloud)", self.generate, bottom)
         self.generate_button.setObjectName("primary")
+        self.backend_changed()
         self.cancel_button = self.button("Annulla", self.cancel_operation, bottom)
         self.cancel_button.setEnabled(False)
         self.button("Importa risultato", self.import_result, bottom)
         self.button("Esporta PNG/JPG", self.export_result, bottom)
         outer.addLayout(bottom)
-        notice = QLabel("Cloud: avviando Codex invii i riferimenti selezionati al servizio. Nessun invio durante l'importazione. Accuratezza dimensionale non garantita.")
+        notice = QLabel("Genera foto avvia direttamente l'invio cloud di immagini e note, elaborazione e salvataggio. Nessun invio durante l'editing. Accuratezza CAD non garantita.")
         notice.setWordWrap(True)
         outer.addWidget(notice)
         self.progress = QProgressBar()
@@ -277,6 +317,12 @@ class MainWindow(QMainWindow):
             action.setShortcut(shortcut)
             action.triggered.connect(callback)
             file_menu.addAction(action)
+        edit_menu = self.menuBar().addMenu("Annotazioni")
+        for text, shortcut, callback in [("Annulla modifica annotazione", "Ctrl+Z", self.undo_annotation), ("Ripeti modifica annotazione", "Ctrl+Shift+Z", self.redo_annotation), ("Esporta PNG annotato", "Ctrl+Shift+E", self.export_annotated)]:
+            action = QAction(text, self)
+            action.setShortcut(shortcut)
+            action.triggered.connect(callback)
+            edit_menu.addAction(action)
         help_menu = self.menuBar().addMenu("Aiuto")
         for text, callback in [("Istruzioni d'uso", self.help), ("Apri dati e diagnostica", lambda: self.open_folder(data_root())), ("Apri ultimo pacchetto", self.open_job), ("Copia prompt", self.copy_prompt), ("Ripristina parametri tentativo", self.restore_attempt), ("Pulisci file temporanei", self.clean_cache)]:
             action = QAction(text, self)
@@ -288,7 +334,7 @@ class MainWindow(QMainWindow):
         p.name = self.name.text().strip()
         p.technical = {k: v.text().strip() for k, v in self.fields.items()}
         p.unit = self.unit.currentText()
-        p.custom = [[self.custom.item(row, col).text() if self.custom.item(row, col) else "" for col in range(2)] for row in range(self.custom.rowCount())]
+        self.sync_variables()
         for name in ["mode", "view", "background", "lighting", "resolution", "aspect"]:
             setattr(p, name, getattr(self, name).currentText())
         p.shadows, p.pbr = self.shadows.isChecked(), self.pbr.isChecked()
@@ -296,16 +342,22 @@ class MainWindow(QMainWindow):
         p.output_dir = self.output_dir.text().strip()
 
     def load_form(self) -> None:
+        previous_row = self.refs.currentRow()
         self._building = True
         p = self.project
+        p.migrate_legacy()
         self.name.setText(p.name)
         self.unit.setCurrentText(p.unit)
         for k, edit in self.fields.items():
             edit.setText(p.technical.get(k, ""))
-        self.custom.setRowCount(len(p.custom))
-        for row, values in enumerate(p.custom):
+        self.custom.setRowCount(len(p.variables))
+        for row, variable in enumerate(p.variables):
+            values = [variable.name, variable.value, variable.unit]
             for col, value in enumerate(values):
-                self.custom.setItem(row, col, QTableWidgetItem(value))
+                item = QTableWidgetItem(value)
+                if col == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, variable.id)
+                self.custom.setItem(row, col, item)
         for name in ["mode", "view", "background", "lighting", "resolution", "aspect"]:
             getattr(self, name).setCurrentText(getattr(p, name))
         self.shadows.setChecked(p.shadows)
@@ -324,12 +376,238 @@ class MainWindow(QMainWindow):
         for attempt in p.attempts:
             self.history.addItem(f"{attempt['time']} · {attempt['status']} · {len(attempt.get('outputs', []))} output")
         self._building = False
+        self.refresh_variable_choices()
+        self.selected_note = ""
         if p.references:
-            self.refs.setCurrentRow(0)
+            self.refs.setCurrentRow(min(max(0, previous_row), len(p.references) - 1))
         else:
             self.input_view.scene().clear()
+            self.input_view.image_size = None
+            self.input_view.annotations = []
+            self.annotation_list.clear()
             self.context_view.clear()
         self.prompt_view.setPlainText(build_prompt(p))
+
+    def sync_variables(self) -> None:
+        variables = []
+        for row in range(self.custom.rowCount()):
+            items = [self.custom.item(row, col) for col in range(3)]
+            values = [item.text().strip() if item else "" for item in items]
+            variable = Variable(*values)
+            if items[0] is not None:
+                saved_id = items[0].data(Qt.ItemDataRole.UserRole)
+                if saved_id:
+                    variable.id = saved_id
+                else:
+                    self.custom.blockSignals(True)
+                    items[0].setData(Qt.ItemDataRole.UserRole, variable.id)
+                    self.custom.blockSignals(False)
+            variables.append(variable)
+        self.project.variables = variables
+        self.project.custom = []
+
+    def refresh_variable_choices(self) -> None:
+        selected = self.annotation_variable.currentData()
+        self.annotation_variable.blockSignals(True)
+        self.annotation_variable.clear()
+        self.annotation_variable.addItem("Nessuna · linea/testo libero", "")
+        for variable in self.project.variables:
+            self.annotation_variable.addItem(variable.label(), variable.id)
+        row = self.annotation_variable.findData(selected)
+        self.annotation_variable.setCurrentIndex(max(0, row))
+        self.annotation_variable.blockSignals(False)
+
+    def variables_changed(self, *args) -> None:
+        if self._building:
+            return
+        self.sync_variables()
+        self.refresh_variable_choices()
+        self.refresh_annotations()
+
+    def add_variable(self) -> None:
+        if self.busy():
+            return
+        self._building = True
+        row = self.custom.rowCount()
+        self.custom.insertRow(row)
+        variable = Variable(f"Quota {row + 1}", "", self.unit.currentText())
+        for col, value in enumerate([variable.name, variable.value, variable.unit]):
+            item = QTableWidgetItem(value)
+            if col == 0:
+                item.setData(Qt.ItemDataRole.UserRole, variable.id)
+            self.custom.setItem(row, col, item)
+        self._building = False
+        self.variables_changed()
+        self.annotation_variable.setCurrentIndex(self.annotation_variable.findData(variable.id))
+        self.custom.setCurrentCell(row, 0)
+        self.custom.editItem(self.custom.item(row, 0))
+
+    def remove_variable(self) -> None:
+        if self.busy():
+            return
+        row = self.custom.currentRow()
+        if row < 0:
+            return
+        self.sync_variables()
+        variable = self.project.variables[row]
+        linked = [a for ref in self.project.references for a in ref.annotations if a.variable_id == variable.id]
+        if linked:
+            self.error("La variabile è collegata ad annotazioni. Elimina o ricollega quelle annotazioni prima di rimuoverla.")
+            return
+        self.custom.removeRow(row)
+        self.variables_changed()
+
+    def annotation_tool_changed(self, row: int) -> None:
+        self.input_view.set_tool(["navigate", "dimension", "line", "note"][row])
+        if row:
+            self.statusBar().showMessage("Scegli la variabile, poi trascina sulla vista. Quota: due estremi; Nota: punto indicato e posizione testo. Esc annulla.")
+
+    def refresh_annotations(self) -> None:
+        ref = self.selected_ref()
+        self.annotation_list.blockSignals(True)
+        self.annotation_list.clear()
+        if ref:
+            if not any(a.id == self.selected_note for a in ref.annotations):
+                self.selected_note = ""
+            for note in ref.annotations:
+                label = {"dimension": "Quota", "line": "Linea", "note": "Nota"}[note.kind]
+                item = QListWidgetItem(label + ": " + (annotation_label(note, self.project.variables) or "senza testo"))
+                item.setData(Qt.ItemDataRole.UserRole, note.id)
+                self.annotation_list.addItem(item)
+                if note.id == self.selected_note:
+                    self.annotation_list.setCurrentItem(item)
+            self.input_view.set_annotations(display_annotations(ref), self.project.variables, self.selected_note)
+        self.annotation_list.blockSignals(False)
+
+    def remember_annotations(self, ref: Reference) -> None:
+        from copy import deepcopy
+        history = self._annotation_undo.setdefault(id(ref), [])
+        history.append(deepcopy(ref.annotations))
+        del history[:-100]
+        self._annotation_redo[id(ref)] = []
+
+    def undo_annotation(self) -> None:
+        self.restore_annotation_edit(self._annotation_undo, self._annotation_redo)
+
+    def redo_annotation(self) -> None:
+        self.restore_annotation_edit(self._annotation_redo, self._annotation_undo)
+
+    def restore_annotation_edit(self, source: dict, target: dict) -> None:
+        from copy import deepcopy
+        ref = self.selected_ref()
+        if ref and not self.busy() and source.get(id(ref)):
+            target.setdefault(id(ref), []).append(deepcopy(ref.annotations))
+            ref.annotations = source[id(ref)].pop()
+            self.refresh_annotations()
+            self.persist()
+
+    def create_annotation(self, kind: str, points: list) -> None:
+        ref = self.selected_ref()
+        if ref is None or self.busy():
+            return
+        self.sync_variables()
+        variable_id = self.annotation_variable.currentData() or ""
+        text = ""
+        if kind == "dimension" and not variable_id:
+            self.error("Aggiungi una variabile e selezionala nella barra Annota prima di disegnare la quota.")
+            self.refresh_annotations()
+            return
+        if kind == "note" and not variable_id:
+            text, ok = QInputDialog.getText(self, "Nota sul documento", "Testo della nota:")
+            if not ok or not text.strip():
+                self.refresh_annotations()
+                return
+        self.remember_annotations(ref)
+        note = Annotation(kind, [to_original(p, ref) for p in points], variable_id, text.strip())
+        ref.annotations.append(note)
+        self.selected_note = note.id
+        self.refresh_annotations()
+        self.persist()
+
+    def move_annotation(self, note_id: str, points: list) -> None:
+        ref = self.selected_ref()
+        if ref and not self.busy():
+            note = next((a for a in ref.annotations if a.id == note_id), None)
+            if note:
+                self.remember_annotations(ref)
+                note.points = [to_original(p, ref) for p in points]
+                self.refresh_annotations()
+                self.persist()
+
+    def select_annotation(self, note_id: str) -> None:
+        self.selected_note = note_id
+        self.refresh_annotations()
+
+    def annotation_list_selected(self, current, previous) -> None:
+        self.select_annotation(current.data(Qt.ItemDataRole.UserRole) if current else "")
+
+    def link_annotation(self) -> None:
+        ref = self.selected_ref()
+        if ref and not self.busy():
+            note = next((a for a in ref.annotations if a.id == self.selected_note), None)
+            if not note:
+                self.statusBar().showMessage("Seleziona prima una annotazione sulla vista o nell'elenco.")
+                return
+            variable = self.annotation_variable.currentData() or ""
+            if note.kind == "dimension" and not variable:
+                self.error("Una quota deve essere collegata a una variabile.")
+                return
+            self.remember_annotations(ref)
+            note.variable_id = variable
+            self.refresh_annotations()
+            self.persist()
+
+    def delete_annotation(self) -> None:
+        ref = self.selected_ref()
+        if ref and self.selected_note and not self.busy():
+            self.remember_annotations(ref)
+            ref.annotations = [a for a in ref.annotations if a.id != self.selected_note]
+            self.selected_note = ""
+            self.refresh_annotations()
+            self.persist()
+
+    def edit_annotation_text(self, item) -> None:
+        ref = self.selected_ref()
+        if ref and not self.busy():
+            note = next((a for a in ref.annotations if a.id == item.data(Qt.ItemDataRole.UserRole)), None)
+            if note:
+                value, ok = QInputDialog.getText(self, "Testo aggiuntivo", "Nota (il valore della variabile si aggiorna dalla tabella):", text=note.text)
+                if ok:
+                    self.remember_annotations(ref)
+                    note.text = value.strip()
+                    self.refresh_annotations()
+                    self.persist()
+
+    def export_annotated(self) -> None:
+        ref = self.selected_ref()
+        if not ref or self.busy():
+            return
+        self.sync_form()
+        suggested = Path(ref.source).with_name(Path(ref.source).stem + "_annotated.png")
+        path, _ = QFileDialog.getSaveFileName(self, "Esporta PNG con quote e note", str(suggested), "PNG (*.png)")
+        if path:
+            try:
+                output = save_png_exclusive(annotated_image(prepare_image(ref), ref, self.project.variables), Path(path))
+                self.statusBar().showMessage(f"PNG annotato salvato: {output}. Originale conservato.")
+            except Exception as exc:
+                self.error(str(exc))
+
+    def backend_changed(self, *args) -> None:
+        if hasattr(self, "generate_button"):
+            self.generate_button.setText("Genera foto (cloud)" if self.backend.currentIndex() == 1 else "Prepara pacchetto manuale")
+
+    def check_connection(self) -> None:
+        if not self.busy():
+            self.run_worker(lambda cancel, progress: check_codex_connection(), self.connection_done)
+
+    def login(self) -> None:
+        if not self.busy():
+            self.run_worker(login_codex, self.connection_done)
+
+    def connection_done(self, result: dict) -> None:
+        status = "Accesso ChatGPT confermato. Premi Genera foto per inviare e generare direttamente." if result["authenticated"] else "Accesso ChatGPT mancante. Premi Accedi a ChatGPT e completa l'accesso ufficiale."
+        self.statusBar().showMessage(status)
+        QMessageBox.information(self, "Connessione al motore", status + "\n\n" + result["availability"] + "\n\n" + result["message"][-1200:])
 
     def persist(self) -> None:
         self.sync_form()
@@ -351,6 +629,11 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(False)
         self.generate_button.setEnabled(False)
         self.backend.setEnabled(False)
+        self.connection_button.setEnabled(False)
+        self.login_button.setEnabled(False)
+        self.annotation_tool.setEnabled(False)
+        self.custom.setEnabled(False)
+        self.input_view.editable = False
         self.cancel_button.setEnabled(True)
         self.progress.setRange(0, 0)
         worker.progress.connect(self.statusBar().showMessage)
@@ -363,6 +646,11 @@ class MainWindow(QMainWindow):
             self.setAcceptDrops(True)
             self.generate_button.setEnabled(True)
             self.backend.setEnabled(True)
+            self.connection_button.setEnabled(True)
+            self.login_button.setEnabled(True)
+            self.annotation_tool.setEnabled(True)
+            self.custom.setEnabled(True)
+            self.input_view.editable = True
             self.cancel_button.setEnabled(False)
             self.progress.setRange(0, 1)
             self.progress.setValue(1)
@@ -458,6 +746,8 @@ class MainWindow(QMainWindow):
             self.context_view.setPlainText(ref.context or "Nessun testo estraibile. Le quote raster non sono lette automaticamente tramite OCR.")
             try:
                 self.input_view.show_image(prepare_image(ref))
+                self.selected_note = ""
+                self.refresh_annotations()
             except Exception as exc:
                 self.error(str(exc))
 
@@ -503,6 +793,8 @@ class MainWindow(QMainWindow):
         if ref and not self.busy():
             ref.crop = None
             self.reference_changed(self.refs.currentRow())
+            self.annotation_tool.setCurrentIndex(0)
+            self.input_view.set_tool("navigate")
             self.input_view.crop_mode = True
             self.statusBar().showMessage("Trascina un rettangolo sull'anteprima per ritagliare; originale conservato")
 
@@ -551,10 +843,6 @@ class MainWindow(QMainWindow):
         if self.project.mode.startswith("C") and self.project.background != "Industriale":
             self.error("La modalità ambientata richiede sfondo Industriale: selezionarlo per evitare istruzioni contrastanti.")
             return
-        if self.backend.currentIndex() == 1 and not batch:
-            answer = QMessageBox.question(self, "Invio al servizio cloud", "Inviare ora a Codex i riferimenti selezionati e i parametri?\nUsa l'autenticazione ChatGPT della CLI e i relativi limiti. Non usa API a pagamento.")
-            if answer != QMessageBox.StandardButton.Yes:
-                return
         snapshot = self.project.to_dict()
         snapshot["attempts"] = []
         self.current_attempt = {"time": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"), "status": "In corso", "backend": self.backend.currentText(), "outputs": [], "parameters": snapshot, "prompt": build_prompt(self.project)}
@@ -724,10 +1012,6 @@ class MainWindow(QMainWindow):
             if issues:
                 self.error(f"Oggetto {p.name}: " + "\n".join(issues))
                 return
-        if self.backend.currentIndex() == 1:
-            answer = QMessageBox.question(self, "Invio batch al cloud", f"Inviare a Codex tutti i {len(self.queue)} oggetti in coda con i rispettivi riferimenti? Ogni variante consuma i limiti del piano.")
-            if answer != QMessageBox.StandardButton.Yes:
-                return
         self.persist()
         self.next_batch()
 
@@ -805,7 +1089,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Rimossi {count} temporanei. Riferimenti, progetti e tentativi conservati.")
 
     def help(self) -> None:
-        QMessageBox.information(self, "Guida rapida", "1. Importa PDF e scegli pagine (es. 1,3-5), aggiungi JPG/DOCX.\n2. Spunta i riferimenti utili e assegna i ruoli. Ruota/ritaglia se necessario.\n3. Inserisci quote, materiale e finitura; scegli modalità e sfondo.\n4. Assistito: prepara pacchetto, allegalo manualmente in Codex/ChatGPT e importa il render.\n5. CLI: avvia l'agente ufficiale; se image_gen non è disponibile usa il pacchetto assistito.\n6. Modifica le istruzioni e premi Genera per un nuovo tentativo.\n\nCronologia: seleziona un tentativo per il risultato e usa Aiuto → Ripristina parametri.\nOgni progetto è archiviato automaticamente nei dati locali. Quando salvi un progetto, conserva anche la cartella .assets accanto al JSON.\nNessun OCR automatico; verifica manualmente quote e conflitti nelle immagini.\nRisoluzione e rapporto sono richieste al modello, non garanzie. Nessuna verifica CAD.")
+        QMessageBox.information(self, "Guida rapida", "1. Importa PDF, JPG o DOCX e assegna i ruoli alle viste.\n2. Inserisci materiali e finitura. Aggiungi variabili (nome, valore, unità) nella tabella.\n3. Scegli la variabile nella barra Annota e usa Quota, Linea o Nota sulla vista. Trascina estremi e linee con Naviga; Ctrl+Z annulla.\n4. Accedi a ChatGPT una volta con il motore ufficiale. Scegli Diretto e premi Genera foto: invio cloud, generazione e salvataggio sono automatici quando il tool immagini è disponibile.\n5. Se il motore segnala limiti o indisponibilità, non viene simulato un risultato. La modalità Manuale resta opzionale.\n6. Cambia una variabile per aggiornare le note. PNG annotato esporta una copia; il render finale deve essere fotografico e privo di annotazioni.\n\nCronologia conserva i parametri e i risultati. Salva progetto include una cartella .assets da conservare con il JSON. I vecchi campi dimensionali vengono convertiti in variabili.\nNessun OCR o controllo CAD: fedeltà visiva, non certificazione geometrica.\nGuida completa nella cartella deploy: GUIDA_USO.txt.")
 
     def dragEnterEvent(self, event) -> None:
         if event.mimeData().hasUrls() and not self.busy():
@@ -824,7 +1108,7 @@ class MainWindow(QMainWindow):
         try:
             self.persist()
             self.settings.setValue("geometry", self.saveGeometry())
-            self.settings.setValue("backend", self.backend.currentIndex())
+            self.settings.setValue("generation_backend_v2", self.backend.currentIndex())
         except Exception:
             logging.exception("Salvataggio chiusura fallito")
         event.accept()

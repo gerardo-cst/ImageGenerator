@@ -7,13 +7,36 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import sys
+import socket
+import getpass
+import hashlib
 
 from PySide6.QtCore import QStandardPaths
 from PySide6.QtGui import QImage
 
 
+def application_directory() -> Path:
+    return Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
+
+
+def asset_path(name: str) -> Path:
+    return Path(getattr(sys, "_MEIPASS", application_directory())) / "assets" / name
+
+
+def portable_profile() -> str:
+    identity = socket.gethostname() + "|" + getpass.getuser()
+    readable = safe_name(socket.gethostname())[:40]
+    return readable + "_" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12]
+
+
 def data_root() -> Path:
-    base = os.environ.get("CST_RENDERAI_DATA") or QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)
+    base = os.environ.get("CST_RENDERAI_DATA")
+    if not base:
+        if (application_directory() / "portable.ini").exists():
+            base = application_directory() / "data" / portable_profile()
+        else:
+            base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)
     root = Path(base)
     root.mkdir(parents=True, exist_ok=True)
     return root
@@ -40,6 +63,28 @@ def safe_name(name: str) -> str:
     if not value or value.upper().split(".")[0] in {"CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(1, 10)], *[f"LPT{i}" for i in range(1, 10)]}:
         return "Oggetto"
     return value
+
+
+def save_png_exclusive(image: QImage, path: Path) -> Path:
+    if image.isNull():
+        raise ValueError("Nessuna immagine da salvare")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    for index in range(100000):
+        name = path.stem + (f"_{index:02d}" if index else "") + ".png"
+        target = path.parent / name
+        try:
+            with target.open("xb"):
+                pass
+        except FileExistsError:
+            continue
+        try:
+            if not image.save(str(target), "PNG"):
+                raise OSError("Impossibile salvare il PNG annotato")
+            return target
+        except Exception:
+            target.unlink(missing_ok=True)
+            raise
+    raise OSError("Troppi file con lo stesso nome")
 
 
 def save_output(image_path: Path, directory: Path, name: str, extension: str = "png") -> Path:

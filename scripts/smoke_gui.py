@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFontDatabase, QFont
 from cst_renderai.window import MainWindow
 from cst_renderai.documents import import_document
-from cst_renderai.models import Project
+from cst_renderai.models import Project, Annotation
 from cst_renderai.prompts import build_prompt
 
 app = QApplication([])
@@ -20,8 +20,16 @@ window.project.references += import_document(Path("examples/Flangia_DN150_fronta
 window.project.references[0].role = "Frontale"
 window.project.references[1].role = "Laterale"
 window.project.references[2].role = "Frontale"
+window.project.migrate_legacy()
+outer = next(v for v in window.project.variables if v.name == "Diametro esterno")
+thickness = next(v for v in window.project.variables if v.name == "Spessore")
+window.project.references[2].annotations = [
+    Annotation("dimension", [[.245, .92], [.66, .92]], outer.id),
+    Annotation("note", [[.63, .74], [.79, .66]], thickness.id, "Bordo della piastra"),
+]
 window.project.output_dir = str(Path(".test-data/gui/outputs").resolve())
 window.load_form()
+window.refs.setCurrentRow(2)
 actual_render = Path("examples/Flangia_DN150_generated.png")
 if actual_render.exists():
     window.sync_form()

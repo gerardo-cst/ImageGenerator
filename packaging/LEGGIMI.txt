@@ -1,0 +1,43 @@
+CST RenderAI - versione portatile Windows x64
+
+AVVIO
+Aprire CST_RenderAI.exe oppure Avvia.bat. Non occorre installare Python.
+La finestra parte massimizzata con barra del titolo Windows: Ripristina per
+spostarla o ridimensionarla, oppure trascinare la barra del titolo.
+
+USO DA UN ALTRO PC / CARTELLA DI RETE
+Copiare TUTTA questa cartella, incluse _internal, tools, portable.ini, examples e docs,
+in una condivisione di rete e aprire CST_RenderAI.exe dal PC Windows client.
+Esempio: \\SERVER\Applicazioni\CST_RenderAI\CST_RenderAI.exe
+Il programma viene eseguito sul PC che lo apre, non sul server.
+Sono necessari Windows x64, accesso ai documenti e permessi di lettura/esecuzione
+sulla cartella e di scrittura nella sottocartella data e nelle destinazioni output.
+Eventuali policy aziendali che bloccano eseguibili di rete vanno gestite dall'IT.
+In alternativa copiare la cartella sul PC locale e avviarla da li.
+
+TUTTO NELLA CARTELLA
+Cache, cronologia, impostazioni e log sono sotto data, in profili separati per
+PC e utente. Due PC possono aprire la stessa applicazione senza sovrascrivere
+la cronologia dell'altro. Non aprire due istanze per lo stesso PC/utente.
+I render sono salvati accanto al documento originale o nella cartella scelta.
+Le credenziali ChatGPT non sono incluse e non vengono trasferite o condivise.
+
+GENERAZIONE
+Il motore Codex ufficiale e incluso in tools/codex, senza credenziali.
+Premere Accedi a ChatGPT una volta su ciascun PC per il login ufficiale.
+Importare i documenti, aggiungere variabili e note, quindi premere Genera foto:
+invio cloud, generazione e salvataggio sono gestiti dall'app, quando il tool
+immagini e disponibile nella sessione Codex. Non servono copia-incolla o API key.
+Le credenziali e i dati interni del motore rimangono nel profilo utente Codex.
+La prova live in sviluppo resta bloccata da Access is denied dell'app-server:
+la generazione diretta su questo PC non e stata verificata, nessun output simulato.
+Manuale e una modalita alternativa opzionale, non il flusso principale.
+
+ANNOTAZIONI
+Aggiungere una variabile (nome, valore, unita), selezionarla nella barra Annota,
+scegliere Quota/Linea/Nota e disegnare sulla vista. Le etichette seguono i valori.
+PNG annotato esporta una copia. Il render finale e richiesto senza quote o note.
+
+Guida operativa passo passo: GUIDA_USO.txt (apribile con Blocco note).
+Documentazione dettagliata: README.md. Limiti e verifiche: docs/CAPABILITIES.md.
+La partenza da una condivisione SMB reale va verificata sulla propria rete.

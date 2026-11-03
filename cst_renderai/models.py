@@ -8,6 +8,35 @@ import uuid
 ROLES = ["Prospettica", "Frontale", "Laterale", "Superiore", "Dettaglio", "Sezione", "Materiale / stile"]
 MODES = ["A — Fedeltà tecnica massima", "B — Fotorealistico standard", "C — Render ambientato", "D — Interpretazione tecnica"]
 TECH_FIELDS = ["Lunghezza", "Larghezza", "Altezza", "Diametro esterno", "Diametro interno", "Spessore", "Scala", "Materiale principale", "Materiali secondari", "Finitura", "Colore RAL", "Rugosità"]
+DIMENSION_FIELDS = TECH_FIELDS[:7]
+MATERIAL_FIELDS = TECH_FIELDS[7:]
+
+
+@dataclass
+class Variable:
+    name: str = ""
+    value: str = ""
+    unit: str = ""
+    id: str = field(default_factory=lambda: uuid.uuid4().hex)
+
+    def label(self) -> str:
+        return f"{self.name} = {self.value} {self.unit}".strip()
+
+
+@dataclass
+class Annotation:
+    kind: str = "dimension"
+    points: list[list[float]] = field(default_factory=lambda: [[.2, .5], [.8, .5]])
+    variable_id: str = ""
+    text: str = ""
+    id: str = field(default_factory=lambda: uuid.uuid4().hex)
+
+    def __post_init__(self) -> None:
+        import math
+        if self.kind not in {"dimension", "line", "note"}:
+            raise ValueError("Tipo annotazione non valido")
+        if len(self.points) != 2 or any(len(p) != 2 or any(not isinstance(v, (int, float)) or not math.isfinite(v) or not 0 <= v <= 1 for v in p) for p in self.points):
+            raise ValueError("Coordinate annotazione non valide")
 
 
 @dataclass
@@ -21,6 +50,10 @@ class Reference:
     page: int | None = None
     rotation: int = 0
     crop: list[float] | None = None
+    annotations: list[Annotation] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.annotations = [Annotation(**a) if isinstance(a, dict) else a for a in self.annotations]
 
 
 @dataclass
@@ -30,9 +63,10 @@ class Project:
     references: list[Reference] = field(default_factory=list)
     technical: dict[str, str] = field(default_factory=dict)
     custom: list[list[str]] = field(default_factory=list)
+    variables: list[Variable] = field(default_factory=list)
     notes: str = ""
     unit: str = "mm"
-    mode: str = MODES[1]
+    mode: str = MODES[0]
     view: str = "Isometrica"
     background: str = "Bianco"
     lighting: str = "Studio"
@@ -45,7 +79,22 @@ class Project:
     attempts: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
+        self.migrate_legacy()
         return asdict(self)
+
+    def migrate_legacy(self) -> None:
+        """Keep existing projects: fixed dimensions/custom pairs become editable variables."""
+        names = {v.name.casefold() for v in self.variables}
+        for key in DIMENSION_FIELDS:
+            value = self.technical.pop(key, "")
+            if value.strip() and key.casefold() not in names:
+                self.variables.append(Variable(key, value, "" if key == "Scala" else self.unit))
+                names.add(key.casefold())
+        for pair in self.custom:
+            if len(pair) >= 2 and pair[0].strip() and pair[0].casefold() not in names:
+                self.variables.append(Variable(pair[0], pair[1]))
+                names.add(pair[0].casefold())
+        self.custom = []
 
     @classmethod
     def from_dict(cls, data: dict) -> Project:
@@ -58,7 +107,10 @@ class Project:
         if not 1 <= data.get("variants", 1) <= 8:
             raise ValueError("Numero varianti non valido")
         data["references"] = [Reference(**r) for r in data.get("references", [])]
-        return cls(**data)
+        data["variables"] = [Variable(**v) for v in data.get("variables", [])]
+        project = cls(**data)
+        project.migrate_legacy()
+        return project
 
     def save(self, path: Path) -> None:
         from .storage import atomic_json

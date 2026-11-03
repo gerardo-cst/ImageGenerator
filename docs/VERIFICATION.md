@@ -1,5 +1,49 @@
 # Risultati delle verifiche
 
+## Aggiornamento variabili, editor e generazione diretta
+
+**27 test superati.** Nuove verifiche: migrazione dimensioni/custom in variabili,
+collegamenti stabili dopo rinomina, coordinate con rotazione/ritaglio, annotazione
+PNG non distruttiva, esportazione senza sovrascrittura, copia pulita e annotata
+nell'ordine giusto, prompt fotografico senza note nel render, persistenza,
+annulla/ripeti, disegno col mouse e trascinamento degli estremi.
+
+Test GUI del clic Genera foto: una chiamata al backend, nessuna conferma intermedia,
+risultato acquisito e salvato. Il backend di questa prova è controllato: **non è
+una generazione cloud reale**. La prova CLI live con tool immagini abilitato resta
+negata dai permessi dell'app-server prima della generazione. Nessun bypass usato.
+
+Screenshot aggiornato in `docs/screenshots/desktop.png`: annotazioni e variabili
+accanto al render reale precedentemente generato. Motore ufficiale incluso nel
+pacchetto, con licenza e risorse originali, senza autenticazione distribuita.
+
+Eseguibile aggiornato in `dist/CST_RenderAI` verificato con diagnostica offline:
+exit code 0, `gui`, `maximized`, `icon`, `annotation_editor`, `annotated_reference`
+e `direct_default` tutti true, due pagine PDF + JPG e salvataggio PNG validi.
+
+La sostituzione dell'EXE in deploy è stata completata dopo che l'utente ha chiuso
+l'istanza che bloccava EXE e DLL. Nessun processo utente terminato forzatamente;
+i dati portatili esistenti sono stati conservati. Il packaging ora controlla
+questo caso prima di copiare.
+
+Diagnostica sul nuovo `deploy/CST_RenderAI.exe` da una directory di lavoro diversa:
+exit code 0, tutti i controlli sopra confermati. Hash dell'EXE identico alla build
+in dist. Guida d'uso aggiornata e distribuzione nativa Codex incluse in deploy.
+
+## Aggiornamento deploy portatile
+
+Suite aggiornata: **19 test superati**, compresi icona, massimizzazione,
+ripristino/ridimensionamento, impostazioni INI nel profilo e separazione dati
+per PC/utente. Eseguibile `deploy/CST_RenderAI.exe` ricompilato con icona ICO.
+
+Prova dell'eseguibile avviato da una directory di lavoro diversa e senza override
+della cartella dati: **exit code 0**. Report: `ok=true`, `references=3`,
+`pdf_pages=2`, `gui=true`, `maximized=true`, `icon=true`. Il log iniziale è stato
+creato nella cartella portatile `deploy/data/<profilo-PC-utente>`.
+
+La prova non usa un secondo PC né una condivisione SMB reale: permessi di rete
+e policy di esecuzione vanno verificati nell'ambiente di destinazione.
+
 Eseguiti su Windows 11, Python 3.13.3, PySide6 6.9.0, PyInstaller 6.13.0,
 il 3 novembre 2026.
 

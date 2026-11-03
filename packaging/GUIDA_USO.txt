@@ -1,0 +1,193 @@
+CST RenderAI - GUIDA D'USO
+=========================
+
+1. AVVIO E ACCESSO
+
+Apri CST_RenderAI.exe o Avvia.bat. Conserva tutta la cartella deploy, incluse
+_internal e tools. Python e il motore ufficiale Codex sono gia inclusi.
+La finestra parte massimizzata: Ripristina o trascina la barra del titolo per
+spostarla e ridimensionarla.
+
+Su ciascun PC premi Accedi a ChatGPT una volta e completa il login ufficiale
+nel browser aperto da Codex. L'app non legge e non condivide le credenziali.
+Connessione controlla il login: non verifica da sola che il tool immagini sia
+disponibile. La generazione richiede Internet e un account con accesso e limiti
+sufficienti. Non serve una API key; non sono usate API a pagamento.
+
+IMPORTANTE: nella sessione di sviluppo la prova reale Codex e stata bloccata
+da Access is denied all'avvio dell'app-server. La generazione automatica reale
+non e stata verificata su questo PC. Provala avviando l'app normalmente dal
+desktop. Se il servizio o i permessi la impediscono, l'app mostra un errore:
+non genera immagini sostitutive o risultati simulati.
+
+2. IMPORTAZIONE DOCUMENTI
+
+Premi Importa oppure trascina i file nella finestra.
+- PDF: indica le pagine, ad esempio 1,3-5. Ogni pagina e un riferimento separato.
+  Reimporta il documento per aggiungere altre pagine.
+- DOCX: vengono estratte le immagini raster incorporate e conservato il contesto
+  testuale generale. I vecchi .doc richiedono conversione in .docx.
+- PNG, JPG/JPEG, WebP: vengono preparati senza ridurre la risoluzione originale.
+
+Spunta soltanto i riferimenti utili e assegna il ruolo di ogni vista: Frontale,
+Laterale, Superiore, Prospettica, Sezione o Dettaglio. Materiale / stile serve
+solo per l'aspetto, non per definire la geometria.
+Le viste geometriche rappresentano LO STESSO oggetto, non oggetti diversi.
+
+Rotella: zoom. Trascina: sposta la vista. Adatta: vista intera.
+Ruota 90 gradi: ruota e azzera il ritaglio. Ritaglia regione: trascina un rettangolo.
+Ripristina: elimina rotazione e ritaglio. L'originale resta intatto.
+
+3. MATERIALI E VARIABILI PERSONALIZZATE
+
+Materiale principale, materiali secondari, finitura, RAL e rugosita sono nel
+pannello destro. Le quote fisse altezza/larghezza sono state sostituite da variabili.
+
+Premi + Variabile e compila le tre colonne:
+
+  Variabile              Valore       Unita
+  Diametro esterno        150          mm
+  Diametro interno         60          mm
+  Spessore                 15          mm
+  Numero fori               4          (lascia vuoto)
+  Guarnizione             PTFE         (lascia vuoto)
+
+Ogni variabile richiede nome e valore; l'unita puo restare vuota. Usa nomi distinti.
+Tutte le variabili compilate diventano vincoli del prompt, anche se non annotate.
+I vecchi progetti convertono automaticamente quote fisse e caratteristiche
+personalizzate in variabili, conservando i materiali.
+
+4. AGGIUNGERE QUOTE, LINEE E NOTE SULL'IMMAGINE
+
+1) Seleziona il documento da annotare nel pannello sinistro.
+2) Nella barra Annota sopra la vista seleziona la variabile da collegare.
+3) Scegli lo strumento:
+   - Quota: trascina tra i due estremi della dimensione. Compaiono linea,
+     frecce ed etichetta nome = valore unita. Richiede una variabile.
+   - Linea: trascina i due estremi. Puo essere collegata a una variabile o libera.
+   - Nota con richiamo: trascina dal punto indicato verso la posizione del testo.
+     Con un semplice clic il testo viene posizionato vicino al punto.
+     Senza variabile viene chiesto un testo libero.
+4) Torna a Naviga / modifica per selezionare una annotazione e trascinarla.
+   Trascina un estremo per cambiare solo quel punto. Puoi selezionarla anche
+   nella lista Annotazioni della vista selezionata, sulla destra.
+5) Cambia valore, nome o unita nella tabella: le note collegate si aggiornano.
+   Il collegamento rimane valido anche quando rinomini la variabile.
+6) Per ricollegare una nota, selezionala, scegli la nuova variabile e premi Collega.
+7) Doppio clic sulla nota nell'elenco: aggiunge o modifica il testo supplementare.
+8) Elimina annotazione selezionata, oppure Canc sulla vista, rimuove la nota.
+   Ctrl+Z annulla; Ctrl+Shift+Z ripete le modifiche alle annotazioni. Esc annulla
+   il gesto in corso e torna a Naviga.
+
+Per rimuovere una variabile gia usata, elimina o ricollega prima le sue annotazioni.
+Rotazione e ritaglio mantengono le note riferite ai punti originali. Quelle fuori
+dal ritaglio restano salvate e riappaiono ripristinando la vista.
+Le linee indicano a cosa si riferisce il valore: NON misurano millimetri dai pixel.
+
+PNG annotato esporta una COPIA con quote e note. Non modifica l'immagine originale
+e non sovrascrive file esistenti. Salva progetto conserva le annotazioni modificabili.
+
+5. GENERAZIONE DIRETTA CON UN CLIC
+
+1) Lascia selezionato Diretto - Codex / ChatGPT in basso.
+2) Imposta vista, sfondo, luce e varianti nel pannello destro (scorrilo se serve).
+   La modalita iniziale A conserva al massimo la fedelta tecnica. Bianco e Studio
+   sono adatti alle foto di prodotto. Le note libere servono per richieste aggiuntive.
+3) Premi Genera foto (cloud).
+
+Quel clic invia esplicitamente i riferimenti selezionati e le note al servizio:
+preparazione, generazione, ricezione e salvataggio sono gestiti dall'app.
+Non devi passare file o prompt manualmente a GPT. Non viene chiesta una seconda
+conferma per ogni tentativo: usa documenti che sei autorizzato a inviare al cloud.
+
+Il motore riceve l'immagine pulita e la copia annotata come rappresentazioni
+dello stesso oggetto. Il risultato richiesto e una fotografia realistica PULITA:
+senza frecce, quote, scritte o le linee blu aggiunte nel documento.
+I prompt richiedono massima qualita disponibile, fedelta, metallo e materiali
+plausibili, microstruttura, luce, riflessi e ombre realistici, senza dettagli inventati.
+
+Il tool immagini deve essere realmente disponibile nella sessione Codex. Se manca,
+se il piano e esaurito o se i permessi bloccano il motore, il tentativo fallisce
+con un messaggio e un log. Non e garantita una risoluzione esatta o un risultato
+piu accurato a ogni iterazione. L'app non passa ad API a pagamento.
+
+6. PROVA CON I FILE DI ESEMPIO
+
+Puoi aprire examples/Flangia_DN150.cst.json insieme alla sua cartella .assets.
+Contiene variabili, annotazioni e un render gia generato come dimostrazione.
+Scegli una cartella output accessibile prima di rigenerare su un altro PC.
+
+Per iniziare da zero:
+1) Nuovo oggetto, Importa examples/Flangia_DN150.pdf, pagine 1-2.
+2) Aggiungi examples/Flangia_DN150_frontale.jpg.
+3) Assegna Frontale alla pagina 1 e al JPG, Laterale alla pagina 2.
+4) Materiale AISI 316L, finitura satinata.
+5) Aggiungi le variabili Diametro esterno=150 mm, Diametro interno=60 mm,
+   Spessore=15 mm. Disegna le quote sulla vista selezionata.
+6) Sfondo Bianco, luce Studio. Dopo il login premi Genera foto.
+
+Il file examples/Flangia_DN150_generated.png e un render AI autentico creato
+in precedenza con il tool integrato della conversazione. Non certifica che
+la generazione CLI sia disponibile sul PC e non e un risultato di una nuova richiesta.
+
+7. OUTPUT, CRONOLOGIA E RIGENERAZIONE
+
+Il primo riferimento e il documento principale. Usa come documento principale
+lo cambia; controlla anche Nome output. Il risultato viene salvato accanto a
+quel documento, oppure nella destinazione scelta con Scegli cartella output.
+Se la cartella non e scrivibile, viene usata la cartella dati e l'avviso resta
+nella cronologia.
+
+Esempio: Flangia_DN150_generated.png, poi _generated_01.png, _02.png, ecc.
+I file precedenti non vengono sovrascritti. La lista sopra il render seleziona
+le varianti. Confronta affiancati mostra documento e fotografia.
+Esporta PNG/JPG crea una copia; JPEG usa sfondo bianco in presenza di alpha.
+
+Per rigenerare cambia variabili, note, materiale o vista e premi Genera foto.
+La Cronologia conserva snapshot, istruzioni, annotazioni e risultati.
+Aiuto > Ripristina parametri tentativo riprende i parametri del tentativo selezionato.
+
+8. PROGETTI, BATCH E RETE
+
+Salva progetto produce JSON e cartella .assets: conservarli e trasferirli insieme.
+Apri progetto ricarica il lavoro. La cartella dati contiene anche gli oggetti
+archiviati automaticamente ai punti di salvataggio e in chiusura.
+
+Batch oggetti: accoda l'oggetto corrente o progetti salvati e premi Avvia coda.
+In Diretto quel clic avvia gli invii cloud in sequenza. Un errore o Annulla ferma
+i successivi. Salva i progetti prima di chiudere: la coda in attesa non e persistita.
+
+Da rete copia TUTTA deploy, incluse tools e _internal, in una condivisione.
+Apri l'EXE dal PC Windows x64 client: gira sul client, non sul server.
+Servono permessi di esecuzione e scrittura in data e nelle destinazioni output.
+Eventuali blocchi aziendali sugli EXE di rete vanno verificati con l'IT.
+
+portable.ini mantiene dati dell'app sotto data/<profilo-PC-utente>. I profili
+evitano collisioni, ma i permessi della rete definiscono la riservatezza.
+Le credenziali e i dati interni del motore Codex rimangono nel suo profilo utente,
+non vengono inclusi nella distribuzione. Ogni PC deve effettuare il proprio accesso.
+Non e stata eseguita una prova SMB reale da un secondo PC.
+
+9. MODALITA MANUALE OPZIONALE
+
+Manuale - solo pacchetto resta un'alternativa per ambienti in cui il tool non
+funziona nella CLI. Non viene attivata automaticamente al posto della generazione.
+Prepara pacchetto manuale salva le immagini reference_*.png e prompt.txt.
+Allega tutte le immagini, comprese _notes, in ordine di nome, in una conversazione
+abilitata; incolla il prompt, genera e scarica. Seleziona il tentativo in Cronologia
+e usa Importa risultato. Un pacchetto pronto non e un render generato.
+
+10. LIMITI E DIAGNOSTICA
+
+Nessun OCR o controllo geometrico CAD locale. Verifica quote, proporzioni e dettagli
+del render: la fotorealisticita non certifica tolleranze o conformita dimensionale.
+Non inventare quote mancanti. Conflitti testuali rilevati o variabili incomplete
+bloccano la generazione finche corretti. Per i PDF protetti serve una copia sbloccata.
+
+Annulla termina la CLI, ma richieste cloud gia accettate possono completarsi
+e consumare limiti. In chiusura attendi che l'operazione termini e chiudi di nuovo.
+Aiuto > Apri dati e diagnostica apre log e job; eventi e risposta Codex sono nel
+job del tentativo. Pulisci file temporanei non elimina progetti e cronologia.
+I dati locali e le annotazioni non sono cifrati: proteggi la cartella di rete.
+
+Approfondimenti: README.md, docs/CAPABILITIES.md, docs/VERIFICATION.md.
